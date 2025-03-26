@@ -50,6 +50,9 @@ namespace drvVesy05
             if (!_moxaTC.Connected)
             {
                 logger.Info("Trying to connect to weighter ARM " + _d["moxaHost"] + ":" + _d["moxaPort"]);
+#if DEBUG
+                Console.WriteLine("Trying to connect to weighter ARM " + _d["moxaHost"] + ":" + _d["moxaPort"]);
+#endif
                 try
                 {
                     _moxaTC = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp); // так себе решение
@@ -70,6 +73,9 @@ namespace drvVesy05
                     // throw ex;
                 }
                 logger.Info("Connection to controller - OK " + _moxaTC.RemoteEndPoint.ToString());
+#if DEBUG
+                Console.WriteLine("Connection to controller - OK " + _moxaTC.RemoteEndPoint.ToString());
+#endif
             }
             new Thread(new ThreadStart(Tranceiver)).Start();
             return true;
@@ -82,6 +88,9 @@ namespace drvVesy05
             string cliCmd = string.Empty;
 
             logger.Info("Moxa connected from " + _d["moxaHost"] + ":" + int.Parse(_d["moxaPort"]));
+#if DEBUG
+            Console.WriteLine("Moxa connected from " + _d["moxaHost"] + ":" + int.Parse(_d["moxaPort"]));
+#endif
 
             while (_keepOpen)
             {
@@ -95,6 +104,9 @@ namespace drvVesy05
                     byte[] ARMbyteArr = new byte[colByteARM];                                               // установил размерность нового массива
                     Buffer.BlockCopy(buffer, 0, ARMbyteArr, 0, colByteARM);
                     logger.Info("ARM query string: " + Encoding.GetEncoding(1251).GetString(ARMbyteArr));   // строка запроса прикладного ПО драйверу
+#if DEBUG
+                    Console.WriteLine("ARM query string: " + Encoding.GetEncoding(1251).GetString(ARMbyteArr));
+#endif
 
                     byte[] controllerCommand = DecodeClientRequestToControllerCommand(buffer, colByteARM);  // Верну null если команда не корректная, иначе - команду для контроллера
                     if (controllerCommand != null)                                                          // команда корректна -> отправляем устройству
@@ -103,6 +115,10 @@ namespace drvVesy05
                         {
                             _moxaTC.Send(controllerCommand, controllerCommand.Length, SocketFlags.None);    // запрос драйвера контроллеру
                             logger.Info(Encoding.GetEncoding(1251).GetString(controllerCommand));           // команда контроллеру
+#if DEBUG
+                            Console.WriteLine(Encoding.UTF8.GetString(controllerCommand));
+#endif
+
                             Thread.Sleep(600);                                                              // подождём пока данные прийдут. На 200 - сыплет ошибки.
                             transferOccured = true;                                                                    // передача данных контроллеру была
                         }
@@ -111,19 +127,25 @@ namespace drvVesy05
                             if (ex.SocketErrorCode == SocketError.TimedOut)
                             {
                                 Exception exInner = new Exception("Прибор не ответил на запрос");           // Согласно спецификации - ловить таймаут
-                                byte[] errorByteArr = XMLFormatter.GetError(exInner, 1);                    // Отформатировал ошибку в XML формат. 
+                                byte[] errorByteArr = StringToXMLParser.GetError(exInner, 1);                    // Отформатировал ошибку в XML формат. 
                                 ARMsocket.Send(errorByteArr, errorByteArr.Length, SocketFlags.None);        // Отправляем в АРМ весов XML в виде byte[].
                             }
                             logger.Error(ex);
+#if DEBUG
+                            Console.Error.WriteLine(ex.StackTrace);
+#endif
                         }
 
                     }
                     else                                                                        // формирование для клиента сообщения об ошибке в его запросе.
                     {
                         Exception ex = new Exception("Ошибка обработки запроса");               // Согласно спецификации.
-                        byte[] errorByteArr = XMLFormatter.GetError(ex, 2);                     // Отформатировал ошибку в XML формат. 
+                        byte[] errorByteArr = StringToXMLParser.GetError(ex, 2);                     // Отформатировал ошибку в XML формат. 
                         ARMsocket.Send(errorByteArr, errorByteArr.Length, SocketFlags.None);    // Отправляем в АРМ весов XML в виде byte[].
                         logger.Error(Encoding.GetEncoding(1251).GetString(errorByteArr));       // пишу ответ для арма весов.
+#if DEBUG
+                        Console.Error.WriteLine(Encoding.GetEncoding(1251).GetString(errorByteArr));
+#endif
                     }
                 }
                 // ------------------------------ от клиента пришёл запрос end --------------------------------------------------------------
@@ -139,11 +161,14 @@ namespace drvVesy05
                     catch (SocketException ex)
                     {
                         logger.Error(ex);
+#if DEBUG
+                        Console.Error.WriteLine(ex.StackTrace);
+#endif
 
                         if (ex.SocketErrorCode == SocketError.TimedOut)                                 // по таймауту - делаю "своё" исключение
                         {
                             Exception exInner = new Exception("Прибор не ответил на запрос");           // Согласно спецификации.
-                            byte[] errorByteArr = XMLFormatter.GetError(exInner, 1);                    // Отформатировал ошибку в XML формат. 
+                            byte[] errorByteArr = StringToXMLParser.GetError(exInner, 1);                    // Отформатировал ошибку в XML формат. 
                             ARMsocket.Send(errorByteArr, errorByteArr.Length, SocketFlags.None);        // Отправляем в АРМ весов XML в виде byte[].
                         }
                     }
@@ -152,19 +177,27 @@ namespace drvVesy05
                     byte[] moxaArr = new byte[colByteFromMoxa];                                         // установил размерность нового массива
                     Buffer.BlockCopy(buffer, 0, moxaArr, 0, colByteFromMoxa);                           // копирую данные в промежуточный массив для отображения
                     logger.Info(Encoding.GetEncoding(1251).GetString(moxaArr)); // ответ драйвера прикладному ПО
+#if DEBUG
+                    Console.WriteLine(Encoding.UTF8.GetString(moxaArr));
+#endif
                     #endregion
 
                     byte[] btArr = null;
                     try
                     {
-                        btArr = XMLFormatter.getStatic(moxaArr);                                        // Если возникла ошибка при разборе сообщения - кидаю исключение.
+                        btArr = StringToXMLParser.getStatic(moxaArr);                                        // Если возникла ошибка при разборе сообщения - кидаю исключение.
                     }
                     catch (Exception ex)
                     {
-                        btArr = XMLFormatter.GetError(ex, 100);                                         // Отформатировал ошибку в XML формат, перевёл в byte[]
+                        btArr = StringToXMLParser.GetError(ex, 100);                                         // Отформатировал ошибку в XML формат, перевёл в byte[]
                     }
 
                     ARMsocket.Send(btArr, btArr.Length, SocketFlags.None);
+
+                    logger.Info(StringToXMLParser.FormatXml(Encoding.UTF8.GetString(btArr)));
+#if DEBUG
+                    Console.WriteLine(StringToXMLParser.FormatXml(Encoding.UTF8.GetString(btArr)));
+#endif
 
                     transferOccured = true;
                 }
@@ -173,6 +206,9 @@ namespace drvVesy05
                 if (ARMsocket.Poll(3000, SelectMode.SelectRead) & ARMsocket.Available == 0)
                 {
                     logger.Info("Lost connection to weighter ARM " + ARMsocket.RemoteEndPoint.ToString());
+#if DEBUG
+                    Console.WriteLine("Lost connection to weighter ARM " + ARMsocket.RemoteEndPoint.ToString());
+#endif
                     _keepOpen = false;
                 }
 
@@ -183,10 +219,17 @@ namespace drvVesy05
             if (_moxaTC.Connected)
             {
                 logger.Info("Connect to controller is closed " + _moxaTC.RemoteEndPoint.ToString());
+#if DEBUG
+                Console.WriteLine("Connect to controller is closed " + _moxaTC.RemoteEndPoint.ToString());
+#endif
                 _moxaTC.Close();
             }
 
             logger.Info("Connect to weighter ARM is closed " + ARMsocket.RemoteEndPoint.ToString()); // отключение от ARM весов
+#if DEBUG
+            Console.WriteLine("Connect to weighter ARM is closed " + ARMsocket.RemoteEndPoint.ToString());
+#endif
+
             ARMsocket.Close();
             _isfree = true;
         }

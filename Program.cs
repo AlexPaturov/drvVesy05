@@ -1,4 +1,6 @@
-﻿using System.ServiceProcess;
+﻿using System;
+using System.ServiceProcess;
+using System.Text;
 
 namespace drvVesy05
 {
@@ -19,6 +21,7 @@ namespace drvVesy05
 #else
             Service1 myServ = new Service1();
             myServ.RunAsConsole(args);
+            Console.OutputEncoding = Encoding.UTF8;
             // here Process is my Service function
             // that will run when my service onstart is call
             // you need to call your own method or function name here instead of Process();

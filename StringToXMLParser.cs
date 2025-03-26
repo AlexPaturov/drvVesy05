@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
@@ -11,7 +12,7 @@ using System.Xml;
 
 namespace drvVesy05
 {
-    public static class XMLFormatter
+    public static class StringToXMLParser
     {
 
         // Получить результат статического взвешивания.
@@ -19,7 +20,7 @@ namespace drvVesy05
         {
             if (bInput != null) 
             { 
-                Dictionary<string, string> preparedAnswer = RawToXML(System.Text.Encoding.Default.GetString(bInput) );
+                Dictionary<string, string> preparedAnswer = StringToXML(System.Text.Encoding.Default.GetString(bInput) );
 
                 XmlDocument xmlDoc = new XmlDocument();                                                     
                 XmlDeclaration xmlDeclaration = xmlDoc.CreateXmlDeclaration("1.0", "UTF-8", null);
@@ -173,56 +174,87 @@ namespace drvVesy05
             return Encoding.GetEncoding(1251).GetBytes(xmlDoc.OuterXml);
         }
 
-        private static Dictionary<string, string> RawToXML(string input)
+        private static Dictionary<string, string> StringToXML(string input)
         {
-            Dictionary<string, string> XMLtmp = new Dictionary<string, string>();
-
-            if (input.Contains("F#1"))                                                                                                  // 1
+            try
             {
-                input = input.Substring(input.IndexOf("F#1") + 3, (input.Length - (input.IndexOf("F#1") + 3))).Trim();
+                // 1.  Проверка формата сообщения
+                if (!input.Contains("F#1"))
+                {
+                    throw new FormatException($"Incorrect message format: missing 'F#1'. Input: {input}");
+                }
+
+                // 2. Удаление префикса
+                string data = input.Substring(input.IndexOf("F#1") + 3).Trim();
+
+                // 3. Исправление возможных проблем с пробелами (если необходимо)
+                data = FixBSafterDate(data);
+
+                // 4.  Парсинг даты и времени
+                (DateTime date, string time, string remainingData) = ParseDateTime(data);
+
+                // 5. Извлечение веса
+                string brutto = ExtractWeight(remainingData);
+
+                // 6. Создание словаря
+                Dictionary<string, string> result = new Dictionary<string, string>();
+                result.Add("Date", date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
+                result.Add("Time", time);
+                result.Add("Brutto", TonnsToKilos(brutto));
+                result.Add("Platform1", "0");
+                result.Add("Platform2", "0");
+                result.Add("PravBort1_2", "0");
+                result.Add("LevBort3_4", "0");
+                result.Add("ShiftPop", "0");
+                result.Add("ShiftPro", "0");
+                result.Add("Delta", "0");
+
+                return result;
             }
-            else
+            catch (Exception ex)
             {
-                throw new Exception($"Format of answer from device is incorrect. {input}");
+#if DEBUG
+                Console.Error.WriteLine($"Error processing input: {input}. Error: {ex.Message}");
+#endif
+                throw; // Re-throw exception after logging
             }
+        }
 
-            string checkedInput = FixBSafterDate(input);
-            if (checkedInput == "0")
+        private static (DateTime Date, string Time, string RemainingData) ParseDateTime(string input)
+        {
+            // 1. Извлечение даты
+            int firstSpace = input.IndexOf(" ");
+            if (firstSpace == -1)
             {
-                throw new ArgumentException($"Controller data is corrupted: {input}");
+                throw new FormatException($"Invalid format: Missing space after date. Input: {input}");
             }
 
-            // Извлекаем дату
-            int firstSpace = checkedInput.IndexOf(" ");
-            if (firstSpace == -1) throw new Exception($"Invalid format: Missing date. {checkedInput}");
+            string datePart = input.Substring(0, firstSpace);
+            string remainingData = input.Substring(firstSpace + 1);
 
-            string datePart = checkedInput.Substring(0, firstSpace);
-            checkedInput = checkedInput.Substring(firstSpace + 1);
-
+            // 2. Валидация и преобразование даты
             if (!DateTime.TryParseExact(datePart, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDate))
             {
-                throw new Exception($"Invalid date format. {checkedInput}");
+                throw new FormatException($"Invalid date format: {datePart}. Input: {input}");
             }
 
-            XMLtmp.Add("Date", parsedDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture));
+            // 3. Извлечение времени
+            int secondSpace = remainingData.IndexOf(" ");
+            if (secondSpace == -1)
+            {
+                throw new FormatException($"Invalid format: Missing space after time. Input: {input}");
+            }
 
-            // Извлекаем время
-            int secondSpace = checkedInput.IndexOf(" ");
-            if (secondSpace == -1) throw new Exception($"Invalid format: Missing time. {checkedInput}");
+            string timePart = remainingData.Substring(0, secondSpace);
+            remainingData = remainingData.Substring(secondSpace + 1);
 
-            string timePart = checkedInput.Substring(0, secondSpace);
-            checkedInput = checkedInput.Substring(secondSpace + 1);
+            // Валидация времени (пример)
+            if (!TimeSpan.TryParse(timePart, out TimeSpan parsedTime)) //Можно использовать TimeSpan.TryParseExact для более строгого контроля формата.
+            {
+                throw new FormatException($"Invalid time format: {timePart}. Input: {input}");
+            }
 
-            XMLtmp.Add("Time", timePart);
-            XMLtmp.Add("Brutto", TonnsToKilos(ExtractWeight(checkedInput)));                                    // Извлекаем вес
-            XMLtmp.Add("Platform1", "0");
-            XMLtmp.Add("Platform2", "0");
-            XMLtmp.Add("PravBort1_2", "0");
-            XMLtmp.Add("LevBort3_4", "0");
-            XMLtmp.Add("ShiftPop", "0");
-            XMLtmp.Add("ShiftPro", "0");
-            XMLtmp.Add("Delta", "0");
-            return XMLtmp;
+            return (parsedDate, timePart, remainingData);
         }
 
         // Перевожу тонны в киллограммы, возвращаю в строковом представлении.
@@ -259,7 +291,7 @@ namespace drvVesy05
                 }
             }
 
-            return "0";
+            throw new ArgumentException($"ExtractWeight can't convert input: {input}");
         }
 
         #region FixBSafterDate() Контроллер иногда теряет пробел после даты и времени - добавляем пробел
@@ -270,5 +302,33 @@ namespace drvVesy05
             return input;
         }
         #endregion
+
+
+        public static string FormatXml(string xml)
+        {
+            try
+            {
+                XmlDocument doc = new XmlDocument();
+                doc.LoadXml(xml);
+
+                StringBuilder stringBuilder = new StringBuilder();
+                using (StringWriter stringWriter = new StringWriter(stringBuilder))
+                {
+                    using (XmlTextWriter xmlTextWriter = new XmlTextWriter(stringWriter))
+                    {
+                        xmlTextWriter.Formatting = Formatting.Indented;
+                        xmlTextWriter.Indentation = 1; // Количество отступов
+                        xmlTextWriter.IndentChar = '\t'; // Символ отступа (табуляция)
+                        doc.Save(xmlTextWriter);
+                    }
+                }
+                return stringBuilder.ToString();
+            }
+            catch (XmlException ex)
+            {
+                // Обработка ошибок парсинга XML
+                return $"Ошибка форматирования XML: {ex.Message}\n{xml}"; // Возвращаем исходный XML с сообщением об ошибке
+            }
+        }
     }
 }

@@ -11,6 +11,7 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Reflection;
 using System.ServiceProcess;
+using System.Text;
 using System.Threading;
 
 namespace drvVesy05
@@ -106,6 +107,7 @@ namespace drvVesy05
                 }
             };
 
+            Console.OutputEncoding = Encoding.UTF8;
             Thread.CurrentThread.CurrentCulture = cultureInfo;
             Thread.CurrentThread.CurrentUICulture = cultureInfo;
             CultureInfo.DefaultThreadCurrentCulture = cultureInfo;

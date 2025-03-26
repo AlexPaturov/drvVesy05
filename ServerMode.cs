@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Diagnostics;
 
 namespace drvVesy05
 {
@@ -21,7 +22,11 @@ namespace drvVesy05
 
         public int Run(Dictionary<string, string> d, Socket moxaTC)
         {
-            logger.Info("SOCKET SERVER MODE"); 
+            logger.Info("SOCKET SERVER MODE");
+#if DEBUG
+            Console.WriteLine("SOCKET SERVER MODE");
+#endif
+
             DateTime dtPrevious = DateTime.Now;
             _run = true;
 
@@ -50,6 +55,10 @@ namespace drvVesy05
                 if (!moxaTC.Connected && soc != null)
                 {
                     logger.Info("Tcp client connected");
+#if DEBUG
+                    Console.WriteLine("Tcp client connected");
+#endif
+
                     conn = new Connection();
                     try
                     {
@@ -66,6 +75,9 @@ namespace drvVesy05
                     if (DateTime.Now.Subtract( dtPrevious).TotalSeconds > 10)
                     {
                         logger.Info("Server active and idle");
+#if DEBUG
+                        Console.WriteLine("Server active and idle");
+#endif
                         dtPrevious = DateTime.Now;
                     }
                     Thread.Sleep(1);
@@ -73,6 +85,9 @@ namespace drvVesy05
             }
 
             logger.Info("Server shutting down");
+#if DEBUG
+            Console.WriteLine("Server shutting down");
+#endif
             srv.Close();
             srv = null;
             conn = null;
