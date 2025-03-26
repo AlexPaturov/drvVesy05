@@ -107,7 +107,6 @@ namespace drvVesy05
                 }
             };
 
-            Console.OutputEncoding = Encoding.UTF8;
             Thread.CurrentThread.CurrentCulture = cultureInfo;
             Thread.CurrentThread.CurrentUICulture = cultureInfo;
             CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
